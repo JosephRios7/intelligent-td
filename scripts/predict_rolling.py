@@ -293,8 +293,14 @@ def execute_train_predict_step(config: dict, train_df: pd.DataFrame, predict_df:
     #
 
     fs_now = datetime.now()
-    print(f"Start train all models from {len(train_feature_sets)} feature sets {"sequentially" if not parallel else "in parallel"}. Train set size:  {len(train_df)} ")
+    # print(f"Start train all models from {len(train_feature_sets)} feature sets {"sequentially" if not parallel else "in parallel"}. Train set size:  {len(train_df)} ")
+    mode = "sequentially" if parallel is None else "in parallel"
 
+    print(
+        f"Start train all models from {len(train_feature_sets)} feature sets {mode}. "
+        f"Train set size: {len(train_df)}"
+    )
+    
     models = dict()
     if isinstance(parallel, Parallel):
         results = parallel(delayed(train_feature_set)(train_df, fs, config) for fs in train_feature_sets)

@@ -20,6 +20,8 @@ from service.App import *
 from common.utils import *
 from inputs.utils_binance import *
 
+from tqdm import tqdm
+
 import logging
 log = logging.getLogger('binance.base_client')
 
@@ -189,7 +191,7 @@ async def health_check():
         log.error(f"Error connecting to Binance server. No status information.")
         return 1
     if system_status.get("status") != 0:
-        log.error(f"Error connecting to Binance server. Bad status: {system_status.get("status")}")
+        log.error(f"Error connecting to Binance server. Bad status: {system_status.get('status')}")
         return 1
 
     # Check time synchronization (difference betweeen server and local time)
@@ -304,7 +306,7 @@ def download_klines(config, data_sources):
             # No existing data so we will download all available data and store as a new file
             df = None
 
-            oldest_point = datetime(2017, 1, 1)
+            oldest_point = datetime(2023, 1, 1)
 
             print(f"File not found. All data will be downloaded and stored in newly created file for {quote} and {freq}.")
 
@@ -313,12 +315,43 @@ def download_klines(config, data_sources):
         #delta_lines = math.ceil(delta_minutes / binsizes[freq])
 
         # === Download from the remote server using binance client
-        klines = client.get_historical_klines(
-            symbol=quote,
-            interval=freq,
-            start_str=oldest_point.isoformat(),
-            #end_str=latest_ts.isoformat()  # fetch everything up to now
-        )
+        klines = []
+
+        limit = 1000  # máximo permitido por Binance
+        start_ts = int(oldest_point.timestamp() * 1000)
+        end_ts = int(latest_ts.timestamp() * 1000)
+        
+        interval_ms = interval_to_milliseconds(freq)
+        step = interval_ms * limit
+        
+        total_steps = max(1, (end_ts - start_ts) // step)
+        
+        pbar = tqdm(total=total_steps, desc=f"Downloading {quote}", unit="chunk")
+        
+        while start_ts < end_ts:
+            temp = client.get_klines(
+                symbol=quote,
+                interval=freq,
+                limit=limit,
+                startTime=start_ts,
+                endTime=start_ts + step
+            )
+        
+            if not temp:
+                break
+        
+            klines.extend(temp)
+        
+            # avanzar al siguiente bloque
+            start_ts = temp[-1][0] + interval_ms
+        
+            pbar.update(1)
+        
+            # evitar rate limit
+            time.sleep(0.1)
+        
+        pbar.close()
+        
 
         df_new = klines_to_df(klines)
 
